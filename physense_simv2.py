@@ -9,7 +9,7 @@
 # This is based on Jason Silverstein's work (v1.0)
 #
 # Version       Date        Initials        Description
-# 2.0           08/28/20    CRW             Initial version, get UDP client server portion going, this
+# 2.00          08/28/20    CRW             Initial version, get UDP client server portion going, this
 #                                           code will serve as the simulator, complete rewrite of GUI
 #                                           using up to 3 levels of boxes for placement to rid this of
 #                                           grid layout, added two more sliders for humidity and barometric
@@ -18,6 +18,11 @@
 #                                           code are both threaded now.  The sys.exit() function along with
 #                                           threading as a daemon are used in an effort to more effectively
 #                                           cleanup the thread after a shutdown by clicking the 'x' on teh GUI.
+#
+# 2.01          08/31/20    EM, CRW         Convert waffle dotty location coordinates to CONSTANTS, added
+#                                           padding between buttons.  Reorganized GUI code for better grouping
+#                                           and readability.  Relocated pygame mixer init to it's own function
+#                                           defined as init_mixer() and called from main().
 
 import socket
 import sys
@@ -26,12 +31,17 @@ from guizero import App, Box, Picture, PushButton, Text, Slider, Waffle
 from threading import Thread
 from os import path
 
+# Global constants
+DEBUG = False       # Set to True to aid in debugging
+
+RED_LED = 0, 0
+YELLOW_LED = 0, 1
+GREEN_LED = 0, 2
+BLUE_LED = 0, 3
 
 # Global variables
-
-DEBUG = False       # Set to True to aid in debugging
 here = path.abspath(path.dirname(__file__))  # Allows us to get the current directory for images / buzzer sound
-led_waffle = ""  # Directly accessed from a function defined prior to it's creation
+led_waffle = None  # Directly accessed from a function defined prior to it's creation
 
 # Images for the light sensor, used in multiple functions
 day_image = here + '/Day.jpg'
@@ -44,35 +54,48 @@ s_port = 6665       # Send Port
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Open a socket for communication to the bridge code
 
 
-def led_set(device, value):  # Turns out LED devices on or off
+def init_mixer():
+
+    pygame.mixer.init()
+    pygame.mixer.music.load(here + '/buzzer.wav')
+
+
+def led_set(device, value, led_array):  # Turns out LED devices on or off
 
     if DEBUG:
         print("In the led_set function, values are device {} and status {}.".format(device, value))
     if value == 'on':
         if device == 'rled':
-            led_waffle[0, 0].color = 'red'
+            led_array[RED_LED].color = 'red'
+
         elif device == 'yled':
-            led_waffle[0, 1].color = 'yellow'
+            led_array[YELLOW_LED].color = 'yellow'
+
         elif device == 'gled':
-            led_waffle[0, 2].color = 'green'
+            led_array[GREEN_LED].color = 'green'
+
         elif device == 'bled':
-            led_waffle[0, 3].color = 'blue'
+            led_array[BLUE_LED].color = 'blue'
+            print('blue on')
+
     elif value == 'off':
         if device == 'rled':
-            led_waffle[0, 0].color = 'black'
+            led_array[RED_LED].color = 'black'
+
         elif device == 'yled':
-            led_waffle[0, 1].color = 'black'
+            led_array[YELLOW_LED].color = 'black'
+
         elif device == 'gled':
-            led_waffle[0, 2].color = 'black'
+            led_array[GREEN_LED].color = 'black'
+
         elif device == 'bled':
-            led_waffle[0, 3].color = 'black'
+            led_array[BLUE_LED].color = 'black'
+            print('blue off')
 
 
 def read_values():  # Reads incoming device values from the student programs for LED and buzzer devices
 
     s.bind((host, r_port))
-    pygame.mixer.init()
-    pygame.mixer.music.load(here + '/buzzer.wav')
 
     while True:
 
@@ -84,7 +107,7 @@ def read_values():  # Reads incoming device values from the student programs for
         data = list(data.split(" "))
 
         if data[0] in {'rled', 'yled', 'gled', 'bled'}:
-            led_set(data[0], data[1])
+            led_set(data[0], data[1], led_waffle)
         elif data[0] == 'buzz':
             pygame.mixer.music.play()
 
@@ -111,9 +134,6 @@ def temperature_set(slider_value):
 
 
 def day_night_toggle(device, light_toggle):
-
-    global day_image
-    global night_image
 
     if light_toggle.image == day_image:
         message_to_send = device + ' ' + '0'
@@ -158,16 +178,22 @@ def launch_simulator():
     button_box = Box(upper_box, border=1, height=240, width=200, align='right')
     Text(button_box, text='Push Buttons', width='fill')
     button_1 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_1')
-    button_2 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_2')
-    button_3 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_3')
-    button_4 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_4')
     button_1.bg = 'gray'
-    button_2.bg = 'gray'
-    button_3.bg = 'gray'
-    button_4.bg = 'gray'
     button_1.update_command(button_toggle, args=['Button_1'])
+    Box(button_box, width=10, height=4)
+
+    button_2 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_2')
+    button_2.bg = 'gray'
     button_2.update_command(button_toggle, args=['Button_2'])
+    Box(button_box, width=10, height=4)
+
+    button_3 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_3')
+    button_3.bg = 'gray'
     button_3.update_command(button_toggle, args=['Button_3'])
+    Box(button_box, width=10, height=4)
+
+    button_4 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_4')
+    button_4.bg = 'gray'
     button_4.update_command(button_toggle, args=['Button_4'])
 
     # Setup sliders for temperature in °F, humidity, and barometric pressure - Only outgoing to student program
@@ -177,15 +203,18 @@ def launch_simulator():
     Text(climate_box, text='Climate Statistics')
     Text(climate_box, text='    Temp °F   Humidity    Pressure', size=10)
     Text(climate_box, text='   temp        humid       press', size=10)
+
     Text(climate_box, width=1, align='left')
-    temperature_slider = Slider(climate_box, start=150, end=-50, height=275, width=20, horizontal=False, align='left')
+    Slider(climate_box, start=150, end=-50, height=275, width=20,
+           horizontal=False, align='left', command=temperature_set)
+
     Text(climate_box, width=1, align='left')
-    humidity_slider = Slider(climate_box, start=100, end=0, height=275, width=20, horizontal=False, align='left')
+    Slider(climate_box, start=100, end=0, height=275, width=20,
+           horizontal=False, align='left', command=humidity_set)
+
     Text(climate_box, width=1, align='left')
-    pressure_slider = Slider(climate_box, start=31, end=29, height=275, width=20, horizontal=False, align='left')
-    temperature_slider.update_command(temperature_set)
-    humidity_slider.update_command(humidity_set)
-    pressure_slider.update_command(pressure_set)
+    Slider(climate_box, start=31, end=29, height=275, width=20,
+           horizontal=False, align='left', command=pressure_set)
 
     # Setup light sensor and the obnoxious buzzer - Light sensor outgoing, but buzzer is for documentation only
 
@@ -197,6 +226,7 @@ def launch_simulator():
     Text(misc_lower_box, text='Obnoxious Buzzer (buzz)')
     Picture(misc_lower_box, image='Obnoxious Sound.jpg', height=130, width=175)
     light_toggle.update_command(day_night_toggle, args=['light', light_toggle])
+
     simulator.display()
 
 
@@ -205,6 +235,7 @@ def main():
     t1 = Thread(target=read_values)
     t1.daemon = True
     t1.start()
+    init_mixer()
     launch_simulator()
     sys.exit()
 

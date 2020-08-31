@@ -11,7 +11,7 @@
 # This is based on Jason Silverstein's work (v1.0)
 #
 # Version       Date        Initials        Description
-# 2.0           08/28/20    CRW             Initial version, get UDP client server portion going, this
+# 2.00          08/28/20    CRW             Initial version, get UDP client server portion going, this
 #                                           code will be imported into student's programs giving them
 #                                           the input / output functions required to manipulate the LED
 #                                           and buzzer devices (output) and receive data from the simulator
@@ -21,6 +21,9 @@
 #                                           the input function reads from.  In the case of the buttons, it
 #                                           first reads the value, then sets it to zero and returns 'pressed'
 #                                           if the integer value is a 1, thus evaluating to a Boolean True.
+#
+# 2.01          08/31/20    CRW             Removed redundant debug statement from the read_values() while True
+#                                           loop.
 
 import socket
 from threading import Thread
@@ -89,8 +92,6 @@ class Sensor:
             data = data.strip("\'")
             data = data.strip("\'")
             data = list(data.split(" "))
-            if self.DEBUG:
-                print("Values are: {} and {} ".format(data[0], int(data[1])))
             self.lookup_table[data[0]] = int(data[1])
 
             if self.DEBUG:
