@@ -23,7 +23,8 @@
 #                                           if the integer value is a 1, thus evaluating to a Boolean True.
 #
 # 2.01          08/31/20    CRW             Removed redundant debug statement from the read_values() while True
-#                                           loop.
+#                                           loop.  Added conditional to check if light sensor was being examined
+#                                           and converted 0 / 1 to off / on.
 
 import socket
 from threading import Thread
@@ -79,6 +80,11 @@ class Sensor:
                 return 'pressed'
             else:
                 return button_value
+        elif device == 'light':
+            if self.lookup_table[device]:
+                return 'on'
+            else:
+                return 'off'
         else:
             return self.lookup_table[device]             # Otherwise, return the value
 
