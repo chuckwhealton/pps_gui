@@ -23,6 +23,16 @@
 #                                           padding between buttons.  Reorganized GUI code for better grouping
 #                                           and readability.  Relocated pygame mixer init to it's own function
 #                                           defined as init_mixer() and called from main().
+# 2.02          09/01/20    CRW             Converted PushButton widget definitions into array within for loop.
+#                                           Converted slider creation to use for loop with zip for parallel iteration.
+#                                           Reduced photos for light sensor (day/night) and buzzer into to 175 x 130
+#                                           resolution which is the size they display in anyway in the hopes of faster
+#                                           loading / switching.  Added reset_devices() function to reset all LEDS,
+#                                           light sensor, and values for temperature, humidity, and pressure sliders.
+#                                           Note that reset_devices() is executed from the bridge side when the
+#                                           student's program begins, called from the constructor sending reset, reset.
+#                                           Removed leftover console message indicating blue LED on / off. Added
+#                                           try/except for read_values().
 
 import socket
 import sys
@@ -32,7 +42,7 @@ from threading import Thread
 from os import path
 
 # Global constants
-DEBUG = False       # Set to True to aid in debugging
+DEBUG = False  # Set to True to aid in debugging
 
 RED_LED = 0, 0
 YELLOW_LED = 0, 1
@@ -41,21 +51,22 @@ BLUE_LED = 0, 3
 
 # Global variables
 here = path.abspath(path.dirname(__file__))  # Allows us to get the current directory for images / buzzer sound
-led_waffle = None  # Directly accessed from a function defined prior to it's creation
+led_waffle = None  # Directly accessed from a function defined prior to it's creation, so no choice
+climate_dials = []  # List for temperature, humidity, and pressure sliders
 
 # Images for the light sensor, used in multiple functions
+light_toggle = None
 day_image = here + '/Day.jpg'
 night_image = here + '/Night.jpg'
 
 host = '127.0.0.1'  # Standard loopback interface address (localhost)
-r_port = 6666       # Receive port
-s_port = 6665       # Send Port
+r_port = 6666  # Receive port
+s_port = 6665  # Send Port
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Open a socket for communication to the bridge code
 
 
 def init_mixer():
-
     pygame.mixer.init()
     pygame.mixer.music.load(here + '/buzzer.wav')
 
@@ -76,7 +87,6 @@ def led_set(device, value, led_array):  # Turns out LED devices on or off
 
         elif device == 'bled':
             led_array[BLUE_LED].color = 'blue'
-            print('blue on')
 
     elif value == 'off':
         if device == 'rled':
@@ -90,7 +100,6 @@ def led_set(device, value, led_array):  # Turns out LED devices on or off
 
         elif device == 'bled':
             led_array[BLUE_LED].color = 'black'
-            print('blue off')
 
 
 def read_values():  # Reads incoming device values from the student programs for LED and buzzer devices
@@ -99,42 +108,53 @@ def read_values():  # Reads incoming device values from the student programs for
 
     while True:
 
-        data, addr = s.recvfrom(1024)  # buffer size, see if we can shrink
-        data = str(data)
-        data = data.strip('b')
-        data = data.strip("\'")
-        data = data.strip("\'")
-        data = list(data.split(" "))
+        try:
+            data, addr = s.recvfrom(1024)  # buffer size, see if we can shrink
+            data = str(data)
+            data = data.strip('b')
+            data = data.strip("\'")
+            data = data.strip("\'")
+            data = list(data.split(" "))
 
-        if data[0] in {'rled', 'yled', 'gled', 'bled'}:
-            led_set(data[0], data[1], led_waffle)
-        elif data[0] == 'buzz':
-            pygame.mixer.music.play()
+            if data[0] in {'rled', 'yled', 'gled', 'bled'}:
+                led_set(data[0], data[1], led_waffle)
+            elif data[0] == 'buzz':
+                pygame.mixer.music.play()
+            elif data[0] == 'reset':
+                reset_devices()
+            if DEBUG:
+                print("\nReceived UDP data of {} from IP address {}, port {}.".format(data, addr[0], addr[1]))
+        except ConnectionResetError:
+            print("No connection to client.")
 
-        if DEBUG:
-            print("\nReceived UDP data of {} from IP address {}, port {}.".format(data, addr[0], addr[1]))
+
+def reset_devices():
+    global light_toggle
+    if DEBUG:
+        print("Resetting Simulator GUI, LEDS (all=off), Light Sensor (not light), and Sliders (0, 0, 29)")
+    for i in {'rled', 'yled', 'gled', 'bled'}:
+        led_set(i, 'off', led_waffle)
+    for i, v in zip([0, 1, 2], [0, 0, 29]):
+        climate_dials[i].value = v
+    light_toggle.image = night_image
 
 
 def pressure_set(slider_value):
-
     message_to_send = 'press' + ' ' + slider_value
     s.sendto(message_to_send.encode('utf-8'), (host, s_port))
 
 
 def humidity_set(slider_value):
-
     message_to_send = 'humid' + ' ' + slider_value
     s.sendto(message_to_send.encode('utf-8'), (host, s_port))
 
 
 def temperature_set(slider_value):
-
     message_to_send = 'temp' + ' ' + slider_value
     s.sendto(message_to_send.encode('utf-8'), (host, s_port))
 
 
 def day_night_toggle(device, light_toggle):
-
     if light_toggle.image == day_image:
         message_to_send = device + ' ' + '0'
         light_toggle.image = night_image
@@ -146,14 +166,15 @@ def day_night_toggle(device, light_toggle):
 
 
 def button_toggle(device):
-
     message_to_send = device + ' ' + '1'
     s.sendto(message_to_send.encode('utf-8'), (host, s_port))
 
 
 def launch_simulator():
-
     global led_waffle
+    global light_toggle
+    global climate_dials
+    button = []
 
     if DEBUG:
         print("In launch_simulator function...")
@@ -177,26 +198,15 @@ def launch_simulator():
 
     button_box = Box(upper_box, border=1, height=240, width=200, align='right')
     Text(button_box, text='Push Buttons', width='fill')
-    button_1 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_1')
-    button_1.bg = 'gray'
-    button_1.update_command(button_toggle, args=['Button_1'])
-    Box(button_box, width=10, height=4)
 
-    button_2 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_2')
-    button_2.bg = 'gray'
-    button_2.update_command(button_toggle, args=['Button_2'])
-    Box(button_box, width=10, height=4)
-
-    button_3 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_3')
-    button_3.bg = 'gray'
-    button_3.update_command(button_toggle, args=['Button_3'])
-    Box(button_box, width=10, height=4)
-
-    button_4 = PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_4')
-    button_4.bg = 'gray'
-    button_4.update_command(button_toggle, args=['Button_4'])
+    for i in range(4):
+        button.append(PushButton(button_box, height=1, width=6, padx=13, pady=11, text='Button_' + str(i + 1)))
+        button[i].bg = 'gray'
+        button[i].update_command(button_toggle, args=['Button_' + str(i + 1)])
+        Box(button_box, width=10, height=4)
 
     # Setup sliders for temperature in °F, humidity, and barometric pressure - Only outgoing to student program
+    # Converted slider creation to use zip for parallel iteration in an effort to reduce code
 
     lower_box = Box(simulator, border=1, height=350, width=410)
     climate_box = Box(lower_box, border=1, height=350, width=200, align='left')
@@ -204,19 +214,12 @@ def launch_simulator():
     Text(climate_box, text='    Temp °F   Humidity    Pressure', size=10)
     Text(climate_box, text='   temp        humid       press', size=10)
 
-    Text(climate_box, width=1, align='left')
-    Slider(climate_box, start=150, end=-50, height=275, width=20,
-           horizontal=False, align='left', command=temperature_set)
+    # The following code creates three sliders for temperature, humidity and pressure using zip for parallel iteration
 
-    Text(climate_box, width=1, align='left')
-    Slider(climate_box, start=100, end=0, height=275, width=20,
-           horizontal=False, align='left', command=humidity_set)
-
-    Text(climate_box, width=1, align='left')
-    Slider(climate_box, start=31, end=29, height=275, width=20,
-           horizontal=False, align='left', command=pressure_set)
-
-    # Setup light sensor and the obnoxious buzzer - Light sensor outgoing, but buzzer is for documentation only
+    for st, en, cmd in zip([150, 100, 31], [-50, 0, 29], [temperature_set, humidity_set, pressure_set]):
+        Text(climate_box, width=1, align='left')
+        climate_dials.append(Slider(climate_box, start=st, end=en, height=275, width=20,
+                                    horizontal=False, align='left', command=cmd))
 
     misc_box = Box(lower_box, border=1, height=350, width=200, align='right')
     misc_upper_box = Box(misc_box, border=1, height=170, width=200)
@@ -231,7 +234,6 @@ def launch_simulator():
 
 
 def main():
-
     t1 = Thread(target=read_values)
     t1.daemon = True
     t1.start()

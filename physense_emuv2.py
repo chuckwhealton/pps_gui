@@ -25,6 +25,9 @@
 # 2.01          08/31/20    CRW             Removed redundant debug statement from the read_values() while True
 #                                           loop.  Added conditional to check if light sensor was being examined
 #                                           and converted 0 / 1 to off / on.
+# 2.02          09/01/20    CRW             Added reset reset message to cause GUI to reset all LEDS to off,
+#                                           temperature sliders to default values of 0, 0, 29, and light sensor
+#                                           back to default of night.  Added try/except for read_values().
 
 import socket
 from threading import Thread
@@ -64,6 +67,11 @@ class Sensor:
         t1.daemon = True                                            # This is an attempt to cleanup the thread on exit
         t1.start()
 
+        if self.DEBUG:
+            print("Sending reset to simulator GUI")
+        message_to_send = 'reset' + ' reset'
+        self.r.sendto(message_to_send.encode('utf-8'), (self.host, self.s_port))
+
     def output(self, device, value):  # For output, which is the four LED devices and the sound device
         if self.DEBUG:
             print("Inside output() function with values of {} and {}.".format(device, value))
@@ -92,14 +100,18 @@ class Sensor:
         if self.DEBUG:
             print("Waiting for data...")
         while True:
-            data, addr = self.r.recvfrom(1024)  # buffer size, see if we can shrink
-            data = str(data)
-            data = data.strip('b')
-            data = data.strip("\'")
-            data = data.strip("\'")
-            data = list(data.split(" "))
-            self.lookup_table[data[0]] = int(data[1])
+            try:
 
-            if self.DEBUG:
-                print("\nReceived UDP data of {} from IP address {}, port {}.".format(data, addr[0], addr[1]))
-                print(self.lookup_table)
+                data, addr = self.r.recvfrom(1024)  # buffer size, see if we can shrink
+                data = str(data)
+                data = data.strip('b')
+                data = data.strip("\'")
+                data = data.strip("\'")
+                data = list(data.split(" "))
+                self.lookup_table[data[0]] = int(data[1])
+
+                if self.DEBUG:
+                    print("\nReceived UDP data of {} from IP address {}, port {}.".format(data, addr[0], addr[1]))
+                    print(self.lookup_table)
+            except ConnectionResetError:
+                print("No connection to simulator GUI, device values in lookup dictionary will be stale.")
