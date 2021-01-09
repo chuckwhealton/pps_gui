@@ -34,7 +34,7 @@ setup(
 
     packages=find_packages(),  # Required
 
-    install_requires=['guizero', 'pygame', 'pps_emu'],  # Optional
+    install_requires=['guizero', 'pygame'],  # Optional
 
     package_data={  # Optional
         'pps_gui': ['buzzer.wav', 'Day.png',
